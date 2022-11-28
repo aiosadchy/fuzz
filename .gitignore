@@ -50,3 +50,10 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# CMake build directories
+/build/
+/cmake-build-*/
+
+# IDE-specific directories
+/.idea/
