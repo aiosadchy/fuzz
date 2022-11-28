@@ -61,6 +61,7 @@ IndentPPDirectives: None
 IndentRequiresClause: false
 IndentWidth: 4
 IndentWrappedFunctionNames: false
+InsertTrailingCommas: Wrapped
 KeepEmptyLinesAtTheStartOfBlocks: false
 LambdaBodyIndentation: Signature
 Language: Cpp
