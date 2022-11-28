@@ -1,2 +1,6 @@
+
 # fuzz
-a fuzzy search library implemented in c
+
+A fuzzy search library implemented in C.
+
+---
