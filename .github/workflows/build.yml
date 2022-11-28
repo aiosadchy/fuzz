@@ -1,0 +1,60 @@
+name: Build
+run-name: >
+  ${{ 
+    format(
+      '[{0} → {1}] [PR#{2}] Build', 
+      github.head_ref,
+      github.base_ref,
+      github.event.number
+    ) 
+  }}
+
+on:
+  pull_request:
+    branches:
+      - master
+      - release/*
+
+env:
+  BUILD_TYPE: Release
+  BUILD_TOOL: Ninja
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Prerequisites
+        shell: bash
+        run: |
+          echo "Installing prerequisites..."
+          sudo apt-get install             \
+              libgl-dev                    \
+              libx11-dev                   \
+              libxcursor-dev               \
+              libxi-dev                    \
+              libxinerama-dev              \
+              libxrandr-dev                \
+              ninja-build                  \
+          ; echo "Finished!"
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{github.workspace}}/build
+
+      - name: Configure CMake
+        shell: bash
+        working-directory: ${{github.workspace}}/build
+        run: cmake "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -G "${BUILD_TOOL}"
+
+      - name: Build
+        shell: bash
+        working-directory: ${{github.workspace}}/build
+        run: cmake --build . --config "$BUILD_TYPE"
+
+      - name: Test
+        shell: bash
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C "$BUILD_TYPE" --output-on-failure
