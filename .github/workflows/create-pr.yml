@@ -59,8 +59,7 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const head = '${{ github.ref_name }}';
-            const is_release_pr = head.toLowerCase().startsWith('release/');
-            const base = is_release_pr
+            const base = head.toLowerCase().startsWith('release/')
                        ? '${{ github.event.repository.default_branch }}'
                        : '${{ steps.latest-release.outputs.NAME }}';
 
@@ -75,7 +74,7 @@ jobs:
                 title:  head,
                 head:   head,
                 base:   base,
-                draft:  is_release_pr
+                draft:  true
               });
               core.info('Success!');
             } catch(error) {
