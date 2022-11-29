@@ -2,14 +2,14 @@
 #include <fuzz/fuzz.h>
 
 int main(void) {
-    FuzzRawData raw_data;
-    fuzz_init_raw_data(&raw_data);
+    FuzzTextData text_data;
+    fuzz_init_text_data(&text_data);
 
     FILE *f1 = fopen("/home/aiosadchy/1.txt", "r");
     FILE *f2 = fopen("/home/aiosadchy/2.txt", "r");
 
-    fuzz_read_raw_data(&raw_data, f1);
-    fuzz_read_raw_data(&raw_data, f2);
+    fuzz_read_text_data(f1, &text_data);
+    fuzz_read_text_data(f2, &text_data);
 
     fclose(f1);
     fclose(f2);
@@ -17,17 +17,17 @@ int main(void) {
     FuzzStringArray string_array;
     fuzz_init_string_array(&string_array);
 
-    fuzz_build_string_array(
-        &string_array,
-        &raw_data,
-        "\n"
+    fuzz_split_into_string_array(
+        &text_data,
+        "\n",
+        &string_array
     );
 
     for (size_t i = 0; i < string_array.size; ++i) {
-        const FuzzString *string = string_array.data + i;
+        const FuzzStringView *string = string_array.data + i;
         printf("[%.*s]\n", (int)(string->end - string->begin), string->begin);
     }
 
     fuzz_clear_string_array(&string_array);
-    fuzz_clear_raw_data(&raw_data);
+    fuzz_clear_text_data(&text_data);
 }

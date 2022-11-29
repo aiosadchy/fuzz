@@ -10,28 +10,28 @@ typedef struct FuzzConfig {
     struct {
         size_t initial_buffer_size;
         double buffer_growth_rate;
-    } raw_data_reading;
+    } text_data;
 
     struct {
         size_t initial_buffer_size;
         double buffer_growth_rate;
-    } string_array_building;
+    } string_array;
 
 } FuzzConfig;
 
-typedef struct FuzzRawData {
+typedef struct FuzzTextData {
     char *data;
     size_t size;
     size_t allocation_size;
-} FuzzRawData;
+} FuzzTextData;
 
-typedef struct FuzzString {
+typedef struct FuzzStringView {
     const char *begin;
     const char *end;
-} FuzzString;
+} FuzzStringView;
 
 typedef struct FuzzStringArray {
-    FuzzString *data;
+    FuzzStringView *data;
     size_t size;
     size_t allocation_size;
 } FuzzStringArray;
@@ -41,15 +41,15 @@ void fuzz_get_config(FuzzConfig *config);
 void fuzz_set_config(FuzzConfig *config);
 FuzzConfig *fuzz_get_config_location(void);
 
-void fuzz_init_raw_data(FuzzRawData *raw_data);
-int fuzz_read_raw_data(FuzzRawData *raw_data, FILE *file);
-void fuzz_clear_raw_data(FuzzRawData *raw_data);
+void fuzz_init_text_data(FuzzTextData *text_data);
+int fuzz_read_text_data(FILE *file, FuzzTextData *text_data);
+void fuzz_clear_text_data(FuzzTextData *text_data);
 
 void fuzz_init_string_array(FuzzStringArray *string_array);
-int fuzz_build_string_array(
-    FuzzStringArray *string_array,
-    const FuzzRawData *raw_data,
-    const char *separator
+int fuzz_split_into_string_array(
+    const FuzzTextData *text_data,
+    const char *separator,
+    FuzzStringArray *string_array
 );
 void fuzz_clear_string_array(FuzzStringArray *string_array);
 
@@ -83,7 +83,7 @@ inline static void fuzz_detail_prefix_function(
 }
 
 inline static const char *fuzz_detail_search_substring(
-    const FuzzString string,
+    const FuzzStringView string,
     const char *pattern,
     const size_t *prefix_function_values
 ) {
@@ -117,11 +117,11 @@ void fuzz_init_config(FuzzConfig *config) {
         return;
     }
     const FuzzConfig default_config = {
-        .raw_data_reading = {
+        .text_data = {
             .initial_buffer_size = 4096,
             .buffer_growth_rate  = 2.0,
         },
-        .string_array_building = {
+        .string_array = {
             .initial_buffer_size = 4096,
             .buffer_growth_rate  = 2.0,
         },
@@ -154,55 +154,55 @@ FuzzConfig *fuzz_get_config_location(void) {
     return &config;
 }
 
-void fuzz_init_raw_data(FuzzRawData *raw_data) {
-    if (raw_data == NULL) {
+void fuzz_init_text_data(FuzzTextData *text_data) {
+    if (text_data == NULL) {
         return;
     }
-    const FuzzRawData initial_raw_data = {
+    const FuzzTextData initial_text_data = {
         .data            = NULL,
         .size            = 0,
         .allocation_size = 0,
     };
-    *raw_data = initial_raw_data;
+    *text_data = initial_text_data;
 }
 
-int fuzz_read_raw_data(FuzzRawData *raw_data, FILE *file) {
-    if (raw_data == NULL || file == NULL) {
+int fuzz_read_text_data(FILE *file, FuzzTextData *text_data) {
+    if (file == NULL || text_data == NULL) {
         return 0;
     }
 
     FuzzConfig config;
     fuzz_get_config(&config);
-    const size_t buffer_size = config.raw_data_reading.initial_buffer_size;
-    const double growth_rate = config.raw_data_reading.buffer_growth_rate;
+    const size_t buffer_size = config.text_data.initial_buffer_size;
+    const double growth_rate = config.text_data.buffer_growth_rate;
 
     while (!feof(file)) {
         // TODO: fix code duplication
-        size_t free_space = raw_data->allocation_size - raw_data->size;
+        size_t free_space = text_data->allocation_size - text_data->size;
 
         if (free_space == 0) {
             const size_t new_size =
-                (raw_data->allocation_size == 0)
+                (text_data->allocation_size == 0)
                     ? buffer_size
-                    : (size_t)((double)raw_data->allocation_size * growth_rate);
+                    : (size_t)((double)text_data->allocation_size * growth_rate);
 
             char *buffer = realloc(
-                (void *)(raw_data->data),
-                new_size * sizeof(*raw_data->data)
+                (void *)(text_data->data),
+                new_size * sizeof(*text_data->data)
             );
             if (buffer == NULL) {
                 return -1;
             }
 
-            raw_data->data            = buffer;
-            raw_data->allocation_size = new_size;
+            text_data->data            = buffer;
+            text_data->allocation_size = new_size;
 
-            free_space = raw_data->allocation_size - raw_data->size;
+            free_space = text_data->allocation_size - text_data->size;
         }
 
         const size_t characters_read = fread(
-            (void *)(raw_data->data + raw_data->size),
-            sizeof(*raw_data->data),
+            (void *)(text_data->data + text_data->size),
+            sizeof(*text_data->data),
             free_space,
             file
         );
@@ -211,18 +211,18 @@ int fuzz_read_raw_data(FuzzRawData *raw_data, FILE *file) {
                 return -1;
             }
         }
-        raw_data->size += characters_read;
+        text_data->size += characters_read;
     }
 
     return 0;
 }
 
-void fuzz_clear_raw_data(FuzzRawData *raw_data) {
-    if (raw_data != NULL) {
-        free((void *)(raw_data->data));
-        raw_data->data            = NULL;
-        raw_data->size            = 0;
-        raw_data->allocation_size = 0;
+void fuzz_clear_text_data(FuzzTextData *text_data) {
+    if (text_data != NULL) {
+        free((void *)(text_data->data));
+        text_data->data            = NULL;
+        text_data->size            = 0;
+        text_data->allocation_size = 0;
     }
 }
 
@@ -238,12 +238,12 @@ void fuzz_init_string_array(FuzzStringArray *string_array) {
     *string_array = initial_string_array;
 }
 
-int fuzz_build_string_array(
-    FuzzStringArray *string_array,
-    const FuzzRawData *raw_data,
-    const char *separator
+int fuzz_split_into_string_array(
+    const FuzzTextData *text_data,
+    const char *separator,
+    FuzzStringArray *string_array
 ) {
-    if (string_array == NULL || raw_data == NULL || separator == NULL) {
+    if (text_data == NULL || separator == NULL || string_array == NULL) {
         return 0;
     }
 
@@ -255,14 +255,14 @@ int fuzz_build_string_array(
     size_t prefix_function[separator_length];
     fuzz_detail_prefix_function(separator, prefix_function);
 
-    FuzzString remaining_data;
-    remaining_data.begin = raw_data->data;
-    remaining_data.end   = raw_data->data + raw_data->size;
+    FuzzStringView remaining_data;
+    remaining_data.begin = text_data->data;
+    remaining_data.end   = text_data->data + text_data->size;
 
     FuzzConfig config;
     fuzz_get_config(&config);
-    const size_t buffer_size = config.string_array_building.initial_buffer_size;
-    const double growth_rate = config.string_array_building.buffer_growth_rate;
+    const size_t buffer_size = config.string_array.initial_buffer_size;
+    const double growth_rate = config.string_array.buffer_growth_rate;
 
     while (remaining_data.begin != remaining_data.end) {
         const char *current_match = fuzz_detail_search_substring(
@@ -280,7 +280,7 @@ int fuzz_build_string_array(
                     ? buffer_size
                     : (size_t)((double)string_array->allocation_size * growth_rate);
 
-            FuzzString *buffer = realloc(
+            FuzzStringView *buffer = realloc(
                 (void *)(string_array->data),
                 new_size * sizeof(*string_array->data)
             );
@@ -292,9 +292,9 @@ int fuzz_build_string_array(
             string_array->allocation_size = new_size;
         }
 
-        FuzzString *new_string = string_array->data + string_array->size;
-        new_string->begin      = remaining_data.begin;
-        new_string->end        = current_match;
+        FuzzStringView *new_string = string_array->data + string_array->size;
+        new_string->begin          = remaining_data.begin;
+        new_string->end            = current_match;
         ++string_array->size;
 
         // TODO: add option to include separator to resulting string view
