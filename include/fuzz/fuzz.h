@@ -63,11 +63,11 @@ void fuzz_init_config(FuzzConfig *config) {
     const FuzzConfig default_config = {
         .raw_data_reading = {
             .initial_buffer_size = 4096,
-            .buffer_growth_rate = 2.0,
+            .buffer_growth_rate  = 2.0,
         },
         .string_array_building = {
             .initial_buffer_size = 4096,
-            .buffer_growth_rate = 2.0,
+            .buffer_growth_rate  = 2.0,
         },
     };
     *config = default_config;
