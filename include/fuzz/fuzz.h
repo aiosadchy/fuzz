@@ -124,11 +124,10 @@ int fuzz_read_raw_data(FuzzRawData *raw_data, FILE *file) {
         size_t free_space = raw_data->allocation_size - raw_data->size;
 
         if (free_space == 0) {
-            // clang-format off
-            const size_t new_size = (raw_data->allocation_size == 0)
-                ? buffer_size
-                : (size_t)((double)raw_data->size * growth_rate);
-            // clang-format on
+            const size_t new_size =
+                (raw_data->allocation_size == 0)
+                    ? buffer_size
+                    : (size_t)((double)raw_data->size * growth_rate);
 
             char *buffer = realloc((void *)(raw_data->data), new_size);
             if (buffer == NULL) {
