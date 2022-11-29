@@ -8,8 +8,8 @@ int main(void) {
     FILE *f1 = fopen("/home/aiosadchy/1.txt", "r");
     FILE *f2 = fopen("/home/aiosadchy/2.txt", "r");
 
-    fuzz_read_text_data(f1, &text_data);
-    fuzz_read_text_data(f2, &text_data);
+    fuzz_read_text_data(&text_data, f1);
+    fuzz_read_text_data(&text_data, f2);
 
     fclose(f1);
     fclose(f2);
@@ -18,9 +18,9 @@ int main(void) {
     fuzz_init_string_array(&string_array);
 
     fuzz_split_into_string_array(
+        &string_array,
         &text_data,
-        "\n",
-        &string_array
+        "\n"
     );
 
     for (size_t i = 0; i < string_array.size; ++i) {

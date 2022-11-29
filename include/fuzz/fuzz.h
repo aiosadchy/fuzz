@@ -22,7 +22,7 @@ typedef struct FuzzConfig {
 typedef struct FuzzTextData {
     char *data;
     size_t size;
-    size_t allocation_size;
+    size_t allocated_size;
 } FuzzTextData;
 
 typedef struct FuzzStringView {
@@ -33,7 +33,7 @@ typedef struct FuzzStringView {
 typedef struct FuzzStringArray {
     FuzzStringView *data;
     size_t size;
-    size_t allocation_size;
+    size_t allocated_size;
 } FuzzStringArray;
 
 void fuzz_init_config(FuzzConfig *config);
@@ -42,19 +42,57 @@ void fuzz_set_config(FuzzConfig *config);
 FuzzConfig *fuzz_get_config_location(void);
 
 void fuzz_init_text_data(FuzzTextData *text_data);
-int fuzz_read_text_data(FILE *file, FuzzTextData *text_data);
+int fuzz_read_text_data(FuzzTextData *text_data, FILE *file);
 void fuzz_clear_text_data(FuzzTextData *text_data);
 
 void fuzz_init_string_array(FuzzStringArray *string_array);
 int fuzz_split_into_string_array(
+    FuzzStringArray *string_array,
     const FuzzTextData *text_data,
-    const char *separator,
-    FuzzStringArray *string_array
+    const char *separator
 );
 void fuzz_clear_string_array(FuzzStringArray *string_array);
 
 
 #ifdef FUZZ_IMPLEMENTATION
+
+inline static int fuzz_detail_grow_array(
+    void **array,
+    size_t *allocated_size,
+    size_t object_size,
+    size_t initial_buffer_size,
+    double growth_rate
+) {
+    if (array == NULL || allocated_size == NULL || object_size == 0) {
+        return 0;
+    }
+
+    if (initial_buffer_size < 1) {
+        initial_buffer_size = 1;
+    }
+
+    if (growth_rate < 1.0) {
+        growth_rate = 1.0;
+    }
+
+    size_t new_allocated_size = initial_buffer_size;
+    if (*allocated_size != 0) {
+        new_allocated_size = (size_t)((double)(*allocated_size) * growth_rate);
+    }
+    if (new_allocated_size < *allocated_size + 1) {
+        new_allocated_size = *allocated_size + 1;
+    }
+
+    void *buffer = realloc(*array, new_allocated_size * object_size);
+    if (buffer == NULL) {
+        return -1;
+    }
+
+    *array          = buffer;
+    *allocated_size = new_allocated_size;
+
+    return 0;
+}
 
 inline static void fuzz_detail_prefix_function(
     const char *string,
@@ -118,11 +156,11 @@ void fuzz_init_config(FuzzConfig *config) {
     }
     const FuzzConfig default_config = {
         .text_data = {
-            .initial_buffer_size = 4096,
+            .initial_buffer_size = 16,
             .buffer_growth_rate  = 2.0,
         },
         .string_array = {
-            .initial_buffer_size = 4096,
+            .initial_buffer_size = 16,
             .buffer_growth_rate  = 2.0,
         },
     };
@@ -159,45 +197,37 @@ void fuzz_init_text_data(FuzzTextData *text_data) {
         return;
     }
     const FuzzTextData initial_text_data = {
-        .data            = NULL,
-        .size            = 0,
-        .allocation_size = 0,
+        .data           = NULL,
+        .size           = 0,
+        .allocated_size = 0,
     };
     *text_data = initial_text_data;
 }
 
-int fuzz_read_text_data(FILE *file, FuzzTextData *text_data) {
-    if (file == NULL || text_data == NULL) {
+int fuzz_read_text_data(FuzzTextData *text_data, FILE *file) {
+    if (text_data == NULL || file == NULL) {
         return 0;
     }
 
-    FuzzConfig config;
-    fuzz_get_config(&config);
-    const size_t buffer_size = config.text_data.initial_buffer_size;
-    const double growth_rate = config.text_data.buffer_growth_rate;
+    const FuzzConfig *config = fuzz_get_config_location();
 
     while (!feof(file)) {
-        // TODO: fix code duplication
-        size_t free_space = text_data->allocation_size - text_data->size;
+        size_t free_space = text_data->allocated_size - text_data->size;
 
         if (free_space == 0) {
-            const size_t new_size =
-                (text_data->allocation_size == 0)
-                    ? buffer_size
-                    : (size_t)((double)text_data->allocation_size * growth_rate);
-
-            char *buffer = realloc(
-                (void *)(text_data->data),
-                new_size * sizeof(*text_data->data)
+            int grow_array_error = fuzz_detail_grow_array(
+                (void **)(&text_data->data),
+                &text_data->allocated_size,
+                sizeof(*text_data->data),
+                config->text_data.initial_buffer_size,
+                config->text_data.buffer_growth_rate
             );
-            if (buffer == NULL) {
+
+            if (grow_array_error) {
                 return -1;
             }
 
-            text_data->data            = buffer;
-            text_data->allocation_size = new_size;
-
-            free_space = text_data->allocation_size - text_data->size;
+            free_space = text_data->allocated_size - text_data->size;
         }
 
         const size_t characters_read = fread(
@@ -220,9 +250,9 @@ int fuzz_read_text_data(FILE *file, FuzzTextData *text_data) {
 void fuzz_clear_text_data(FuzzTextData *text_data) {
     if (text_data != NULL) {
         free((void *)(text_data->data));
-        text_data->data            = NULL;
-        text_data->size            = 0;
-        text_data->allocation_size = 0;
+        text_data->data           = NULL;
+        text_data->size           = 0;
+        text_data->allocated_size = 0;
     }
 }
 
@@ -231,19 +261,19 @@ void fuzz_init_string_array(FuzzStringArray *string_array) {
         return;
     }
     const FuzzStringArray initial_string_array = {
-        .data            = NULL,
-        .size            = 0,
-        .allocation_size = 0,
+        .data           = NULL,
+        .size           = 0,
+        .allocated_size = 0,
     };
     *string_array = initial_string_array;
 }
 
 int fuzz_split_into_string_array(
+    FuzzStringArray *string_array,
     const FuzzTextData *text_data,
-    const char *separator,
-    FuzzStringArray *string_array
+    const char *separator
 ) {
-    if (text_data == NULL || separator == NULL || string_array == NULL) {
+    if (string_array == NULL || text_data == NULL || separator == NULL) {
         return 0;
     }
 
@@ -259,10 +289,7 @@ int fuzz_split_into_string_array(
     remaining_data.begin = text_data->data;
     remaining_data.end   = text_data->data + text_data->size;
 
-    FuzzConfig config;
-    fuzz_get_config(&config);
-    const size_t buffer_size = config.string_array.initial_buffer_size;
-    const double growth_rate = config.string_array.buffer_growth_rate;
+    const FuzzConfig *config = fuzz_get_config_location();
 
     while (remaining_data.begin != remaining_data.end) {
         const char *current_match = fuzz_detail_search_substring(
@@ -271,25 +298,18 @@ int fuzz_split_into_string_array(
             prefix_function
         );
 
-        // TODO: fix code duplication
-        size_t free_space = string_array->allocation_size - string_array->size;
-
-        if (free_space == 0) {
-            const size_t new_size =
-                (string_array->allocation_size == 0)
-                    ? buffer_size
-                    : (size_t)((double)string_array->allocation_size * growth_rate);
-
-            FuzzStringView *buffer = realloc(
-                (void *)(string_array->data),
-                new_size * sizeof(*string_array->data)
+        if (string_array->allocated_size == string_array->size) {
+            int grow_array_error = fuzz_detail_grow_array(
+                (void **)(&string_array->data),
+                &string_array->allocated_size,
+                sizeof(*string_array->data),
+                config->string_array.initial_buffer_size,
+                config->string_array.buffer_growth_rate
             );
-            if (buffer == NULL) {
+
+            if (grow_array_error) {
                 return -1;
             }
-
-            string_array->data            = buffer;
-            string_array->allocation_size = new_size;
         }
 
         FuzzStringView *new_string = string_array->data + string_array->size;
@@ -310,9 +330,9 @@ int fuzz_split_into_string_array(
 void fuzz_clear_string_array(FuzzStringArray *string_array) {
     if (string_array != NULL) {
         free((void *)(string_array->data));
-        string_array->data            = NULL;
-        string_array->size            = 0;
-        string_array->allocation_size = 0;
+        string_array->data           = NULL;
+        string_array->size           = 0;
+        string_array->allocated_size = 0;
     }
 }
 
