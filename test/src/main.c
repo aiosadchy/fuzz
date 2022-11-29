@@ -2,7 +2,8 @@
 #include <fuzz/fuzz.h>
 
 int main(void) {
-    FuzzRawData raw_data = fuzz_make_raw_data();
+    FuzzRawData raw_data;
+    fuzz_init_raw_data(&raw_data);
 
     FILE *f1 = fopen("/home/aiosadchy/1.txt", "r");
     FILE *f2 = fopen("/home/aiosadchy/2.txt", "r");
