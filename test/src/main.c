@@ -14,11 +14,20 @@ int main(void) {
     fclose(f1);
     fclose(f2);
 
-    fuzz_get_config_location()->raw_data_reading.initial_buffer_size = 10;
+    FuzzStringArray string_array;
+    fuzz_init_string_array(&string_array);
 
-    printf("size            = [%zu]\n", raw_data.size);
-    printf("allocation_size = [%zu]\n", raw_data.allocation_size);
-    printf("data            = [%.*s]\n", (int)(raw_data.size), raw_data.data);
+    fuzz_build_string_array(
+        &string_array,
+        &raw_data,
+        "\n"
+    );
 
+    for (size_t i = 0; i < string_array.size; ++i) {
+        const FuzzString *string = string_array.data + i;
+        printf("[%.*s]\n", (int)(string->end - string->begin), string->begin);
+    }
+
+    fuzz_clear_string_array(&string_array);
     fuzz_clear_raw_data(&raw_data);
 }
