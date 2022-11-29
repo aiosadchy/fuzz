@@ -14,8 +14,8 @@ project(fuzz
 )
 
 
-add_library(fuzz INTERFACE)
-target_include_directories(fuzz INTERFACE include)
+add_library(fuzz src/fuzz/fuzz.c)
+target_include_directories(fuzz PUBLIC include)
 # TODO: maybe 99 is enough
 set_property(TARGET fuzz PROPERTY C_STANDARD 11)
 
